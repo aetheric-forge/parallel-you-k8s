@@ -1,11 +1,11 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: parallel-you
-  namespace: aetheric-forge
   annotations:
-    cert-manager.io/cluster-issuer: le-prod
-    metallb.io/address-pool: public-pool
+    cert-manager.io/cluster-issuer: step-ca-int-ca
+    external-dns.alpha.kubernetes.io/hostname: py-dev.int.aethericforge.ca
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    metallb.io/address-pool: private-pool
     nginx.ingress.kubernetes.io/affinity: cookie
     nginx.ingress.kubernetes.io/affinity-mode: persistent
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
@@ -13,20 +13,22 @@ metadata:
     nginx.ingress.kubernetes.io/session-cookie-name: parallel-you-affinity
     nginx.ingress.kubernetes.io/session-cookie-samesite: Lax
     nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+  name: parallel-you
+  namespace: aetheric-forge
 spec:
-  ingressClassName: nginx-public
-  tls:
-    - hosts:
-        - parallel-you-dev.aethericforge.ca
-      secretName: parallel-you-dev-tls
+  ingressClassName: nginx-private
   rules:
-    - host: parallel-you-dev.aethericforge.ca
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: parallel-you
-                port:
-                  number: 80
+  - host: py-dev.int.aethericforge.ca
+    http:
+      paths:
+      - backend:
+          service:
+            name: parallel-you
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - py-dev.int.aethericforge.ca
+    secretName: parallel-you-tls
