@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: parallel-you
+  namespace: aetheric-forge
+  annotations:
+    cert-manager.io/cluster-issuer: le-prod
+    metallb.io/address-pool: public-pool
+    nginx.ingress.kubernetes.io/affinity: cookie
+    nginx.ingress.kubernetes.io/affinity-mode: persistent
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/session-cookie-name: parallel-you-affinity
+    nginx.ingress.kubernetes.io/session-cookie-samesite: Lax
+    nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+spec:
+  ingressClassName: nginx-public
+  tls:
+    - hosts:
+        - parallel-you-dev.aethericforge.ca
+      secretName: parallel-you-dev-tls
+  rules:
+    - host: parallel-you-dev.aethericforge.ca
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: parallel-you
+                port:
+                  number: 80
