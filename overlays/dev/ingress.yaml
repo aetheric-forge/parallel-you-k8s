@@ -6,13 +6,16 @@ metadata:
     external-dns.alpha.kubernetes.io/hostname: py-dev.int.aethericforge.ca
     external-dns.alpha.kubernetes.io/ttl: "300"
     metallb.io/address-pool: private-pool
+    nginx.ingress.kbuernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/affinity: cookie
     nginx.ingress.kubernetes.io/affinity-mode: persistent
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/session-cookie-name: parallel-you-affinity
     nginx.ingress.kubernetes.io/session-cookie-samesite: Lax
     nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
   name: parallel-you
   namespace: aetheric-forge
 spec:
