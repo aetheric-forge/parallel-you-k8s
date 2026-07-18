@@ -16,6 +16,8 @@ metadata:
     nginx.ingress.kubernetes.io/session-cookie-samesite: Lax
     nginx.ingress.kubernetes.io/session-cookie-secure: "true"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
   name: parallel-you
   namespace: aetheric-forge
 spec:
