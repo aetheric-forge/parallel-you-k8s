@@ -23,6 +23,8 @@ spec:
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
+      serviceAccountName: parallel-you
+      imagePullSecrets: []
       securityContext:
         runAsNonRoot: true
         runAsUser: 1654
