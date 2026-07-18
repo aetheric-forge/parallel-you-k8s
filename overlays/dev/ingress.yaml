@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
-    cert-manager.io/cluster-issuer: step-ca-int-ca
+    cert-manager.io/cluster-issuer: step-ca-int-acme
     external-dns.alpha.kubernetes.io/hostname: py-dev.int.aethericforge.ca
     external-dns.alpha.kubernetes.io/ttl: "300"
     metallb.io/address-pool: private-pool
