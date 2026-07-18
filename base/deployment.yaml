@@ -51,6 +51,8 @@ spec:
               value: Production
             - name: ASPNETCORE_FORWARDEDHEADERS_ENABLED
               value: "true"
+            - name: SSL_CERT_FILE
+              value: /var/run/aetheric-forge/trust/ca.crt
           envFrom:
             - secretRef:
                 name: parallel-you-config
@@ -87,6 +89,9 @@ spec:
               mountPath: /home/app/.aspnet/DataProtection-Keys
             - name: tmp
               mountPath: /tmp
+            - name: step-ca-root-ca
+              mountPath: /var/run/aetheric-forge/trust
+              readOnly: true
       volumes:
         - name: data-protection-keys
           persistentVolumeClaim:
@@ -94,3 +99,9 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 128Mi
+        - name: step-ca-root-ca
+          configMap:
+            name: step-ca-root-ca
+            items:
+              - key: ca.crt
+                path: ca.crt
