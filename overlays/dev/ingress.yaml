@@ -21,7 +21,7 @@ metadata:
   name: parallel-you
   namespace: aetheric-forge
 spec:
-  ingressClassName: nginx-private
+  ingressClassName: nginx
   rules:
   - host: py-dev.int.aethericforge.ca
     http:
