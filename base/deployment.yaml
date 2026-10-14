@@ -18,8 +18,6 @@ spec:
       app.kubernetes.io/name: parallel-you
   template:
     metadata:
-      annotations:
-        aetheric-forge/consumer-revision: 9d348db0b8b71fbfe2c979189fdf346bc98a7bf46bf6bd01aeb5fe4f24bc0350
       labels:
         app.kubernetes.io/name: parallel-you
     spec:
@@ -36,7 +34,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: parallel-you
-          image: ghcr.io/aetheric-forge/parallel-you:sha-9c83e03@sha256:b8f81991ec0adb278320fe9365aa934a152ae5e69415732c3164eb251636c755
+          image: ghcr.io/aetheric-forge/parallel-you:1.0.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -55,16 +53,9 @@ spec:
               value: "true"
             - name: SSL_CERT_FILE
               value: /var/run/aetheric-forge/trust/ca.crt
-            - name: ParallelYou__ProvisionedConfigurationPath
-              value: /var/run/aetheric-forge/parallel-you/configuration.json
-            - name: ParallelYou__DeploymentId
-              value: f7448b244efacc5bf6b2decc4a7b0879eeb971dbf87e79657eb6735e9445318e
-            - name: ParallelYou__Environment
-              value: production
-            - name: ParallelYou__PlanId
-              value: 41926c2300f105b25f5d66e77c33a920ae58ed0fa177485ddb5a867f170ffe2a
-            - name: ParallelYou__ProtectionKeyDirectory
-              value: /data/keys
+          envFrom:
+            - secretRef:
+                name: parallel-you-config
           startupProbe:
             httpGet:
               path: /health/live
@@ -95,22 +86,13 @@ spec:
               memory: 1Gi
           volumeMounts:
             - name: data-protection-keys
-              mountPath: /data/keys
-            - name: parallel-you-consumer
-              mountPath: /var/run/aetheric-forge/parallel-you
-              readOnly: true
+              mountPath: /home/app/.aspnet/DataProtection-Keys
             - name: tmp
               mountPath: /tmp
             - name: step-ca-root-ca
               mountPath: /var/run/aetheric-forge/trust
               readOnly: true
       volumes:
-        - name: parallel-you-consumer
-          secret:
-            secretName: parallel-you-consumer
-            items:
-              - key: configuration.json
-                path: configuration.json
         - name: data-protection-keys
           persistentVolumeClaim:
             claimName: parallel-you-data-protection
