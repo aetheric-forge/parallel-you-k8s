@@ -1,139 +1,92 @@
 # Parallel You Kubernetes deployment
 
-Kustomize manifests for deploying [Parallel You](https://github.com/aetheric-forge/parallel-you) to the Aetheric Forge Kubernetes cluster.
-
-The deployment uses the immutable image:
-
-```text
-ghcr.io/aetheric-forge/parallel-you:1.0.0
-```
+Deploys the standalone [Parallel You host](https://github.com/aetheric-forge/parallel-you) at **https://py.int.aethericforge.ca** in the `aetheric-forge` namespace on context `blackcircuit-ca-platform-prod`.
 
 ## Layout
 
-```text
-base/          Deployment, Service, and Data Protection storage
-overlays/dev/  Public development ingress and TLS configuration
-```
+- `base/`: standalone host, ClusterIP Service, service account, and persistent authentication-key storage.
+- `overlays/prod/`: private production ingress and pinned image.
+- `argocd/application.yaml`: automated GitOps deployment of `overlays/prod` from main.
+- `overlays/dev/`: historical dev ingress, retained for reference. Its old cluster is not the deployment target; a separate dev deployment requires its own consumer artifact and binding overrides.
 
-The base targets the existing `aetheric-forge` namespace. That namespace is already covered by the cluster-wide Aetheric Forge Velero schedule, so this repository does not create a competing backup schedule.
+The production ingress uses `nginx-private`, the `step-ca-int-ca` ClusterIssuer, and internal external-dns. Access requires the private network and trust in the internal CA. No public ingress is created. The namespace is already covered by the platform Velero backup schedule.
 
-## Prerequisites
+## Published image
 
-- The `aetheric-forge` namespace exists.
-- NGINX Ingress, cert-manager, and the `le-prod` ClusterIssuer are available.
-- MongoDB and Redis are reachable from the namespace.
-- The Keycloak client permits the callback URI:
+The Linux amd64 image comes from merged Parallel You source commit `9c83e03affe700c07f526e0b5908d655ccea07e0` (PR #16), with its pinned runtime and primitives dependencies. The image is `ghcr.io/aetheric-forge/parallel-you:sha-9c83e03@sha256:b8f81991ec0adb278320fe9365aa934a152ae5e69415732c3164eb251636c755`. The overlay pins this immutable digest. See `overlays/prod/kustomization.yaml` for the exact tag and digest.
 
-  ```text
-  https://parallel-you-dev.aethericforge.ca/signin-oidc
-  ```
+## Consumer configuration
 
-## Application configuration secret
+The host mounts only the scoped `parallel-you-consumer` Secret, under key `configuration.json`. It uses the existing provisioned institution:
 
-Create a local file named `.env.parallel-you`. Do not commit it.
+- Deployment ID: `f7448b244efacc5bf6b2decc4a7b0879eeb971dbf87e79657eb6735e9445318e`.
+- Environment: `production`.
+- Plan ID: `41926c2300f105b25f5d66e77c33a920ae58ed0fa177485ddb5a867f170ffe2a`.
+- Library database: `parallel-you`, collection `knowledge`.
+- Parent Workbench: the existing scoped Redis grant.
 
-```dotenv
-Keycloak__Authority=https://keycloak.example/realms/example
-Keycloak__Realm=example
-Keycloak__ClientId=parallel-you
-Keycloak__ClientSecret=replace-me
-MongoDb__Host=mongodb.example
-MongoDb__Port=27017
-MongoDb__Username=parallel-you
-MongoDb__Password=replace-me
-MongoDb__DatabaseName=parallel-you
-MongoDb__AuthenticationDatabase=parallel-you
-MongoDb__DirectConnection=true
-Redis__Host=redis.example
-Redis__Port=6379
-Redis__Password=replace-me
-Redis__Ssl=false
-Redis__Database=0
-```
+The private host artifact is a projection of `aethericforge-parallel-you-consumer`: the Library, Workbench, institution identity and plan are preserved; only the browser client differs. It is delivered separately so the public host keeps its own OIDC settings. The Secret annotations record the source artifact, deployment, plan and host origin.
 
-Create or update the Kubernetes Secret:
+The dedicated browser client is `parallel-you-private-web-f7448b244efacc5bf6b2decc`, in realm `int.aethericforge.ca`, using authority `https://sso.aethericforge.ca`. It uses confidential authorization-code flow and S256 PKCE, with service accounts and direct access grants disabled. Its provisioning-owner marker is the institution deployment ID, and its host-origin marker is `https://py.int.aethericforge.ca`.
+
+Exact browser settings:
+
+- Redirect URI: `https://py.int.aethericforge.ca/signin-oidc`.
+- Logout callback: `https://py.int.aethericforge.ca/signout-callback-oidc`.
+- Web origin: `https://py.int.aethericforge.ca`.
+
+Deliver the version-1 artifact through provisioning/operator tooling. Do not commit credential values. For an existing private artifact file:
 
 ```bash
-kubectl create secret generic parallel-you-config \
-  --namespace aetheric-forge \
-  --from-env-file=.env.parallel-you \
-  --dry-run=client \
-  --output=yaml \
-  | kubectl apply -f -
+kubectl --context blackcircuit-ca-platform-prod create secret generic parallel-you-consumer \
+  --namespace aetheric-forge --from-file=configuration.json=/private/path/configuration.json \
+  --dry-run=client --output=yaml \
+  | kubectl --context blackcircuit-ca-platform-prod apply --server-side \
+      --field-manager=parallel-you-host-delivery -f -
 ```
 
-After changing this Secret on an existing deployment, replace the pod so the process receives the new environment:
+Before replacing an existing artifact, verify its deployment, environment, plan and private browser client. Refresh this host projection after provisioning rotates upstream Library/Workbench credentials; update the manifest plan pin when applying a newly reviewed plan, then restart the Deployment. The public artifact must retain its public browser client.
 
-```bash
-kubectl rollout restart deployment/parallel-you \
-  --namespace aetheric-forge
-kubectl rollout status deployment/parallel-you \
-  --namespace aetheric-forge \
-  --timeout=180s
-```
+The host does not mount the admin root credential store or encryption key. It does not recreate the Library or migrate existing personal records. Its service-account token is disabled.
 
-## GHCR pull credentials
+## Persistent storage and trust
 
-The Deployment references `ghcr-pull-secret`. If the package is private, create it from the Docker configuration already authenticated to GHCR:
+`parallel-you-data-protection` supplies a 1Gi persistent volume mounted at `/data/keys`. Preserve it across pod replacement. `ParallelYou:ProtectionKeyDirectory` points there. The non-root container runs with a read-only root filesystem; `/tmp` uses an `emptyDir`.
 
-```bash
-kubectl create secret generic ghcr-pull-secret \
-  --namespace aetheric-forge \
-  --type=kubernetes.io/dockerconfigjson \
-  --from-file=.dockerconfigjson="$HOME/.docker/config.json" \
-  --dry-run=client \
-  --output=yaml \
-  | kubectl apply -f -
-```
-
-If the package is public, remove `imagePullSecrets` from `base/deployment.yaml` or retain an existing cluster credential.
+The host mounts `step-ca-root-ca` and sets `SSL_CERT_FILE` for platform trust. Rolling updates have no surge pod, avoiding concurrent attachment of the single-writer authentication-key volume. Blazor Server uses ingress cookie affinity.
 
 ## Validate and deploy
 
-Render the complete development overlay before applying it:
+The namespace, consumer Secret, CA ConfigMap, private ingress controller and internal certificate issuer must exist before activating the Application. The image package is public; no pull credential is required.
 
 ```bash
-kubectl kustomize overlays/dev
+kubectl kustomize overlays/prod
+kubectl --context blackcircuit-ca-platform-prod apply --dry-run=server -k overlays/prod
+kubectl --context blackcircuit-ca-platform-prod apply -f argocd/application.yaml
+kubectl --context blackcircuit-ca-platform-prod --namespace aetheric-forge \
+  rollout status deployment/parallel-you --timeout=180s
 ```
 
-Apply and observe the rollout:
+The GitOps Application retains automatic sync, pruning and self-healing. Changes must be committed to main before applying the Application. It manages this host's manifests, not its externally delivered consumer Secret.
+
+## Verify
+
+From the private network:
 
 ```bash
-kubectl apply -k overlays/dev
-kubectl rollout status deployment/parallel-you \
-  --namespace aetheric-forge \
-  --timeout=180s
+curl --fail https://py.int.aethericforge.ca/health/live
+curl --fail https://py.int.aethericforge.ca/health/ready
 ```
 
-Verify the platform endpoints:
+`/` redirects to `/parallel-you`. The landing page allows anonymous access; all seven working pages require sign-in. Readiness checks the actual Mongo database and parent Redis connection. Verify that login reaches the configured Keycloak realm without callback errors. A signed-in user can then verify that existing personal records are available.
+
+## Update or roll back
+
+Update the image tag and digest in the production overlay and base, render and review the manifests, and merge the change. Do not use `latest`. Roll back by reverting the Git image pin to a compatible standalone-host revision. The old v1.0.0 container uses a different configuration contract and is not a compatible image-only rollback.
+
+After a consumer configuration update:
 
 ```bash
-kubectl port-forward \
-  --namespace aetheric-forge \
-  service/parallel-you 8080:80
-
-curl --fail http://127.0.0.1:8080/health/live
-curl --fail http://127.0.0.1:8080/health/ready
+kubectl --context blackcircuit-ca-platform-prod --namespace aetheric-forge \
+  rollout restart deployment/parallel-you
 ```
-
-Then test the public workflow: log in, create a capture, restart the pod, and confirm that the capture remains available.
-
-## Updating the image
-
-Change the tag in `overlays/dev/kustomization.yaml`, render the overlay, and commit the new immutable version. Avoid deploying `latest`.
-
-```yaml
-images:
-  - name: ghcr.io/aetheric-forge/parallel-you
-    newTag: 1.0.1
-```
-
-## Operational behavior
-
-- Liveness uses `/health/live`; readiness verifies MongoDB and Redis through `/health/ready`.
-- The application runs as the image's non-root UID and uses a read-only root filesystem.
-- An `emptyDir` supplies writable temporary storage.
-- ASP.NET Core Data Protection keys are stored on a persistent volume, preserving authentication cookies across pod replacement.
-- The initial deployment has one replica. NGINX cookie affinity is configured for Blazor Server circuits before any later horizontal scaling.
-- The rolling strategy never starts a surge pod, which avoids concurrent attachment problems with the single-writer Data Protection volume.
-- Redis is recoverable cache state. MongoDB is durable application state and must be backed up independently if it is external to the namespace backup scope.

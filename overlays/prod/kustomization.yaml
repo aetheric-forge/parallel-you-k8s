@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - ingress.yaml
+images:
+  - name: ghcr.io/aetheric-forge/parallel-you
+    newTag: sha-9c83e03
+    digest: sha256:b8f81991ec0adb278320fe9365aa934a152ae5e69415732c3164eb251636c755
